@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ripoff Twitter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    body {
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      margin: 0 auto;
+      padding: 10px;
+      max-width: 600px;
+      background-color: #f7f9fa;
+      color: #111;
+    }
+    h2 {
+      text-align: center;
+      color: #1da1f2;
+    }
+    #auth, #postForm {
+      background: #fff;
+      padding: 15px;
+      border-radius: 10px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+      margin-bottom: 15px;
+    }
+    input, textarea, button {
+      width: 100%;
+      padding: 10px;
+      margin: 6px 0;
+      box-sizing: border-box;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 1rem;
+    }
+    button {
+      background-color: #1da1f2;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s;
+    }
+    button:hover {
+      background-color: #0d8ddf;
+    }
+    .post {
+      background: #fff;
+      border-radius: 10px;
+      padding: 15px;
+      margin: 10px 0;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.08);
+    }
+    .meta {
+      font-size: 0.9em;
+      color: #555;
+      margin-bottom: 5px;
+    }
+    .timestamp {
+      font-size: 0.8em;
+      color: #888;
+      margin-top: 5px;
+    }
+    .comment {
+      font-size: 0.85em;
+      border-top: 1px dashed #ddd;
+      padding-top: 5px;
+      margin-top: 5px;
+    }
+    .reply {
+      margin-left: 15px;
+      font-size: 0.8em;
+      border-left: 2px solid #ccc;
+      padding-left: 10px;
+    }
+    .btn-inline {
+      width: auto;
+      display: inline-block;
+      margin-right: 8px;
+      font-size: 0.9em;
+    }
+    input[type="text"] {
+      margin-top: 5px;
+    }
+    @media (max-width: 600px) {
+      body {
+        margin: 5px;
+        font-size: 16px;
+      }
+      .post {
+        padding: 12px;
+      }
+      input, textarea, button {
+        font-size: 1rem;
+      }
+    }
+  </style>
+</head>
+<body>
+  <h2>Ripoff Twitter</h2>
+
+  <div id="auth">
+    <input id="email" type="email" placeholder="Email">
+    <input id="password" type="password" placeholder="Password">
+    <input id="username" type="text" placeholder="Username (for sign up)">
+    <button id="signupBtn">Sign Up</button>
+    <button id="loginBtn">Log In</button>
+    <button id="logoutBtn" style="display:none">Log Out</button>
+  </div>
+  <p id="user-info"></p>
+
+  <div id="postForm" style="display:none">
+    <textarea id="postText" placeholder="What's happening?" rows="3"></textarea>
+    <button id="postBtn">Post</button>
+  </div>
+
+  <div id="feed"></div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+    import { getFirestore, doc, collection, addDoc, query, orderBy, onSnapshot, updateDoc, deleteDoc, getDoc, setDoc, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBM0p_RMFnR_scPKrDrKUPOBB0IkQz73ds",
+      authDomain: "ripofftwitter-eb939.firebaseapp.com",
+      projectId: "ripofftwitter-eb939",
+      storageBucket: "ripofftwitter-eb939.appspot.com",
+      messagingSenderId: "1062506746667",
+      appId: "1:1062506746667:web:7d8da60ed0d5678e732b6e",
+      measurementId: "G-YVMHCFYT8H"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    getAnalytics(app);
+    const auth = getAuth();
+    const db = getFirestore(app);
+
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const usernameInput = document.getElementById("username");
+    const signupBtn = document.getElementById("signupBtn");
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const postBtn = document.getElementById("postBtn");
+    const postForm = document.getElementById("postForm");
+    const userInfo = document.getElementById("user-info");
+    const feed = document.getElementById("feed");
+
+    let currentUser = null;
+    let currentProfile = null;
+
+    onAuthStateChanged(auth, async user => {
+      currentUser = user;
+      if (user) {
+        logoutBtn.style.display = "block";
+        loginBtn.style.display = signupBtn.style.display = "none";
+        postForm.style.display = "block";
+        const profDoc = await getDoc(doc(db, "profiles", user.uid));
+        if (profDoc.exists()) {
+          currentProfile = profDoc.data();
+          userInfo.textContent = `@${currentProfile.username}`;
+        } else {
+          userInfo.textContent = `No profile found`;
+        }
+        loadPosts();
+      } else {
+        logoutBtn.style.display = "none";
+        loginBtn.style.display = signupBtn.style.display = "block";
+        postForm.style.display = "none";
+        userInfo.textContent = "Not logged in";
+        feed.innerHTML = "";
+      }
+    });
+
+    signupBtn.onclick = async () => {
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      const username = usernameInput.value.trim();
+      if (!username) return alert("Username required");
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, "profiles", cred.user.uid), {
+          email,
+          username,
+          createdAt: serverTimestamp()
+        });
+      } catch (e) {
+        alert(e.message);
+      }
+    };
+
+    loginBtn.onclick = async () => {
+      try {
+        await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
+      } catch (e) {
+        alert(e.message);
+      }
+    };
+
+    logoutBtn.onclick = () => signOut(auth);
+
+    postBtn.onclick = async () => {
+      const text = document.getElementById("postText").value.trim();
+      if (!text || !currentUser || !currentProfile) return;
+      try {
+        await addDoc(collection(db, "posts"), {
+          content: text,
+          userId: currentUser.uid,
+          username: currentProfile.username,
+          likes: [],
+          comments: [],
+          createdAt: serverTimestamp()
+        });
+        document.getElementById("postText").value = "";
+      } catch (e) {
+        alert("Failed to post: " + e.message);
+      }
+    };
+
+    function formatTimestamp(ts) {
+      if (!ts) return "";
+      const date = ts.toDate();
+      return date.toLocaleString();
+    }
+
+    function renderComments(comments, postId) {
+      return comments.map((c, i) => `
+        <div class="comment">
+          <strong>@${c.by}:</strong> ${c.text}
+          <div class="reply">
+            ${(c.replies || []).map(r => `
+              <div><strong>@${r.by}:</strong> ${r.text}</div>
+            `).join("")}
+            <input type="text" id="reply-${postId}-${i}" placeholder="Reply to @${c.by}">
+            <button class="btn-inline" onclick="replyToComment('${postId}', ${i})">Reply</button>
+          </div>
+        </div>
+      `).join("");
+    }
+
+    function loadPosts() {
+      const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+      onSnapshot(q, snap => {
+        feed.innerHTML = "";
+        snap.forEach(docSnap => {
+          const p = docSnap.data(), id = docSnap.id;
+          const div = document.createElement("div");
+          div.className = "post";
+          const liked = p.likes.includes(currentUser.uid);
+          div.innerHTML = `
+            <div class="meta"><strong>@${p.username}</strong></div>
+            <div>${p.content}</div>
+            <div class="timestamp">${formatTimestamp(p.createdAt)}</div>
+            <button class="btn-inline" onclick="toggleLike('${id}')">${liked ? "Unlike" : "Like"} (${p.likes.length})</button>
+            ${p.userId === currentUser.uid ? `
+              <button class="btn-inline" onclick="editPost('${id}', \`${p.content}\`)">Edit</button>
+              <button class="btn-inline" onclick="deletePost('${id}')">Delete</button>` : ''}
+            <div class="comment-box">
+              <input type="text" id="comment-${id}" placeholder="Reply...">
+              <button class="btn-inline" onclick="addComment('${id}')">Reply</button>
+              <div>${renderComments(p.comments || [], id)}</div>
+            </div>`;
+          feed.appendChild(div);
+        });
+      });
+    }
+
+    window.toggleLike = async id => {
+      const ref = doc(db, "posts", id);
+      const snap = await getDoc(ref);
+      const arr = snap.data().likes;
+      await updateDoc(ref, {
+        likes: arr.includes(currentUser.uid) ? arrayRemove(currentUser.uid) : arrayUnion(currentUser.uid)
+      });
+    };
+
+    window.editPost = async (id, oldText) => {
+      const nv = prompt("Edit:", oldText);
+      if (nv !== null) await updateDoc(doc(db, "posts", id), { content: nv });
+    };
+
+    window.deletePost = id => confirm("Delete?") && deleteDoc(doc(db, "posts", id));
+
+    window.addComment = async id => {
+      const inp = document.getElementById(`comment-${id}`);
+      const t = inp.value.trim();
+      if (!t) return;
+      await updateDoc(doc(db, "posts", id), {
+        comments: arrayUnion({ by: currentProfile.username, text: t, replies: [] })
+      });
+      inp.value = "";
+    };
+
+    window.replyToComment = async (postId, commentIndex) => {
+      const ref = doc(db, "posts", postId);
+      const snap = await getDoc(ref);
+      const data = snap.data();
+      const comments = data.comments || [];
+      const input = document.getElementById(`reply-${postId}-${commentIndex}`);
+      const replyText = input.value.trim();
+      if (!replyText) return;
+
+      const updatedReplies = (comments[commentIndex].replies || []).concat({
+        by: currentProfile.username,
+        text: replyText
+      });
+      comments[commentIndex].replies = updatedReplies;
+
+      await updateDoc(ref, { comments });
+      input.value = "";
+    };
+  </script>
+</body>
+</html>

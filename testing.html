@@ -60,14 +60,14 @@
       color: #888;
       margin-top: 5px;
     }
-    .comment {
+    .comment, .comment-toggle {
       font-size: 0.85em;
       border-top: 1px dashed #ddd;
       padding-top: 5px;
       margin-top: 5px;
       position: relative;
     }
-    .reply {
+    .reply, .reply-toggle {
       margin-left: 15px;
       font-size: 0.8em;
       border-left: 2px solid #ccc;
@@ -131,7 +131,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
-    import { getFirestore, doc, collection, addDoc, query, orderBy, onSnapshot, updateDoc, deleteDoc, getDoc, setDoc, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+    import { getFirestore, doc, collection, addDoc, query, orderBy, onSnapshot, updateDoc, deleteDoc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBM0p_RMFnR_scPKrDrKUPOBB0IkQz73ds",
@@ -169,13 +169,8 @@
         loginBtn.style.display = signupBtn.style.display = "none";
         postForm.style.display = "block";
         const profDoc = await getDoc(doc(db, "profiles", user.uid));
-        if (profDoc.exists()) {
-          currentProfile = profDoc.data();
-          userInfo.textContent = `@${currentProfile.username}`;
-        } else {
-          currentProfile = null;
-          userInfo.textContent = `No profile found`;
-        }
+        currentProfile = profDoc.exists() ? profDoc.data() : null;
+        userInfo.textContent = currentProfile ? `@${currentProfile.username}` : `No profile found`;
         loadPosts();
       } else {
         logoutBtn.style.display = "none";
@@ -195,9 +190,7 @@
       try {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
         await setDoc(doc(db, "profiles", cred.user.uid), {
-          email,
-          username,
-          createdAt: serverTimestamp()
+          email, username, createdAt: serverTimestamp()
         });
       } catch (e) {
         alert(e.message);
@@ -239,12 +232,18 @@
     }
 
     function renderComments(comments, postId) {
-      return comments.map((c, i) => `
+      const showCommentsLabel = comments.length ? `<div class="comment-toggle">Show ${comments.length} comments</div>` : '';
+      const commentList = comments.map((c, i) => {
+        const replies = c.replies || [];
+        const showRepliesLabel = replies.length ? `<div class="reply-toggle">Show ${replies.length} replies</div>` : '';
+        return `
         <div class="comment">
+          ${showCommentsLabel}
           <strong>@${c.by}:</strong> ${c.text}
           ${currentProfile && c.by === currentProfile.username ? `<button class="btn-inline delete-btn" onclick="deleteComment('${postId}', ${i})">Delete</button>` : ''}
+          ${showRepliesLabel}
           <div class="reply">
-            ${(c.replies || []).map((r, ri) => `
+            ${replies.map((r, ri) => `
               <div>
                 <strong>@${r.by}:</strong> ${r.text}
                 ${currentProfile && r.by === currentProfile.username ? `<button class="btn-inline delete-btn" onclick="deleteReply('${postId}', ${i}, ${ri})">Delete</button>` : ''}
@@ -253,8 +252,9 @@
             <input type="text" id="reply-${postId}-${i}" placeholder="Reply to @${c.by}">
             <button class="btn-inline" onclick="replyToComment('${postId}', ${i})">Reply</button>
           </div>
-        </div>
-      `).join("");
+        </div>`;
+      }).join('');
+      return showCommentsLabel + commentList;
     }
 
     function loadPosts() {
@@ -263,21 +263,22 @@
         feed.innerHTML = "";
         snap.forEach(docSnap => {
           const p = docSnap.data(), id = docSnap.id;
+          const liked = p.likes.includes(currentUser?.uid);
+          const commentsHtml = renderComments(p.comments || [], id);
           const div = document.createElement("div");
           div.className = "post";
-          const liked = p.likes.includes(currentUser.uid);
           div.innerHTML = `
             <div class="meta"><strong>@${p.username}</strong></div>
             <div>${p.content}</div>
             <div class="timestamp">${formatTimestamp(p.createdAt)}</div>
             <button class="btn-inline" onclick="toggleLike('${id}')">${liked ? "Unlike" : "Like"} (${p.likes.length})</button>
-            ${p.userId === currentUser.uid ? `
+            ${p.userId === currentUser?.uid ? `
               <button class="btn-inline" onclick="editPost('${id}', \`${p.content}\`)">Edit</button>
               <button class="btn-inline" onclick="deletePost('${id}')">Delete</button>` : ''}
             <div class="comment-box">
               <input type="text" id="comment-${id}" placeholder="Reply...">
               <button class="btn-inline" onclick="addComment('${id}')">Reply</button>
-              <div>${renderComments(p.comments || [], id)}</div>
+              <div>${commentsHtml}</div>
             </div>`;
           feed.appendChild(div);
         });
@@ -291,78 +292,71 @@
       if (!postSnap.exists()) return;
       const data = postSnap.data();
       const likes = data.likes || [];
-      const userIndex = likes.indexOf(currentUser.uid);
-      if (userIndex >= 0) {
-        likes.splice(userIndex, 1);
-      } else {
-        likes.push(currentUser.uid);
-      }
+      const i = likes.indexOf(currentUser.uid);
+      if (i >= 0) likes.splice(i, 1); else likes.push(currentUser.uid);
       await updateDoc(postRef, { likes });
     };
 
     window.addComment = async (postId) => {
       if (!currentUser || !currentProfile) return alert("Log in first");
-      const input = document.getElementById(`comment-${postId}`);
-      const text = input.value.trim();
+      const inp = document.getElementById(`comment-${postId}`);
+      const text = inp.value.trim();
       if (!text) return;
       const postRef = doc(db, "posts", postId);
-      const postSnap = await getDoc(postRef);
-      if (!postSnap.exists()) return alert("Post missing");
-      const comments = postSnap.data().comments || [];
+      const snap = await getDoc(postRef);
+      if (!snap.exists()) return;
+      const comments = snap.data().comments || [];
       comments.push({ by: currentProfile.username, text, replies: [] });
       await updateDoc(postRef, { comments });
-      input.value = "";
+      inp.value = "";
     };
 
-    window.replyToComment = async (postId, commentIndex) => {
+    window.replyToComment = async (postId, ci) => {
       if (!currentUser || !currentProfile) return alert("Log in first");
-      const input = document.getElementById(`reply-${postId}-${commentIndex}`);
-      const text = input.value.trim();
+      const inp = document.getElementById(`reply-${postId}-${ci}`);
+      const text = inp.value.trim();
       if (!text) return;
       const postRef = doc(db, "posts", postId);
-      const postSnap = await getDoc(postRef);
-      if (!postSnap.exists()) return alert("Post missing");
-      const comments = postSnap.data().comments || [];
-      if (!comments[commentIndex]) return alert("Comment missing");
-      comments[commentIndex].replies = comments[commentIndex].replies || [];
-      comments[commentIndex].replies.push({ by: currentProfile.username, text });
+      const snap = await getDoc(postRef);
+      if (!snap.exists()) return;
+      const comments = snap.data().comments || [];
+      if (!comments[ci]) return;
+      comments[ci].replies = comments[ci].replies || [];
+      comments[ci].replies.push({ by: currentProfile.username, text });
       await updateDoc(postRef, { comments });
-      input.value = "";
+      inp.value = "";
     };
 
-    window.deleteComment = async (postId, commentIndex) => {
+    window.deleteComment = async (postId, ci) => {
       if (!currentUser || !currentProfile) return alert("Log in first");
       if (!confirm("Delete this comment?")) return;
       const postRef = doc(db, "posts", postId);
-      const postSnap = await getDoc(postRef);
-      if (!postSnap.exists()) return alert("Post missing");
-      const comments = postSnap.data().comments || [];
-      if (!comments[commentIndex]) return alert("Comment missing");
-      if (comments[commentIndex].by !== currentProfile.username) return alert("Not your comment");
-      comments.splice(commentIndex, 1);
+      const snap = await getDoc(postRef);
+      if (!snap.exists()) return;
+      const comments = snap.data().comments || [];
+      if (!comments[ci] || comments[ci].by !== currentProfile.username) return alert("Not your comment");
+      comments.splice(ci, 1);
       await updateDoc(postRef, { comments });
     };
 
-    window.deleteReply = async (postId, commentIndex, replyIndex) => {
+    window.deleteReply = async (postId, ci, ri) => {
       if (!currentUser || !currentProfile) return alert("Log in first");
       if (!confirm("Delete this reply?")) return;
       const postRef = doc(db, "posts", postId);
-      const postSnap = await getDoc(postRef);
-      if (!postSnap.exists()) return alert("Post missing");
-      const comments = postSnap.data().comments || [];
-      if (!comments[commentIndex] || !comments[commentIndex].replies || !comments[commentIndex].replies[replyIndex]) return alert("Reply missing");
-      if (comments[commentIndex].replies[replyIndex].by !== currentProfile.username) return alert("Not your reply");
-      comments[commentIndex].replies.splice(replyIndex, 1);
+      const snap = await getDoc(postRef);
+      if (!snap.exists()) return;
+      const comments = snap.data().comments || [];
+      if (!comments[ci]?.replies?.[ri] || comments[ci].replies[ri].by !== currentProfile.username) return alert("Not your reply");
+      comments[ci].replies.splice(ri, 1);
       await updateDoc(postRef, { comments });
     };
 
     window.editPost = async (postId, oldContent) => {
       const newText = prompt("Edit your post:", oldContent);
-      if (newText === null) return; // Cancel
+      if (newText === null) return;
       const trimmed = newText.trim();
       if (!trimmed) return alert("Cannot be empty");
-      const postRef = doc(db, "posts", postId);
-      await updateDoc(postRef, { content: trimmed });
+      await updateDoc(doc(db, "posts", postId), { content: trimmed });
     };
 
     window.deletePost = async (postId) => {

@@ -117,31 +117,6 @@
       background: #a0cfff;
       cursor: default;
     }
-    .comment-box {
-      margin-top: 12px;
-      border-top: 1px solid #ddd;
-      padding-top: 8px;
-    }
-    .comment-box input[type="text"] {
-      width: calc(100% - 70px);
-      display: inline-block;
-      margin-right: 6px;
-      padding: 6px;
-      font-size: 0.9rem;
-    }
-    .comment-box button {
-      width: 60px;
-      padding: 6px;
-      font-size: 0.9rem;
-    }
-    .comment {
-      font-size: 0.85rem;
-      color: #444;
-      margin-top: 4px;
-      padding-left: 6px;
-      border-left: 2px solid #1da1f2;
-      word-wrap: break-word;
-    }
     @media (max-width: 420px) {
       .buttons {
         flex-direction: column;
@@ -189,12 +164,11 @@
       onSnapshot, updateDoc, deleteDoc, getDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
-    // Your Firebase config
     const firebaseConfig = {
       apiKey: "AIzaSyBM0p_RMFnR_scPKrDrKUPOBB0IkQz73ds",
       authDomain: "ripofftwitter-eb939.firebaseapp.com",
       projectId: "ripofftwitter-eb939",
-      storageBucket: "ripofftwitter-eb939.firebasestorage.app",
+      storageBucket: "ripofftwitter-eb939.appspot.com",
       messagingSenderId: "1062506746667",
       appId: "1:1062506746667:web:7d8da60ed0d5678e732b6e",
       measurementId: "G-YVMHCFYT8H"
@@ -221,19 +195,15 @@
     let currentProfile = null;
     let allPosts = [];
 
-    // Listen for auth changes
     onAuthStateChanged(auth, async user => {
       currentUser = user;
       if (user) {
         logoutBtn.style.display = "inline-block";
         loginBtn.style.display = signupBtn.style.display = "none";
         document.getElementById("postForm").style.display = "block";
-
-        // Load profile
         const profileDoc = await getDoc(doc(db, "profiles", user.uid));
         currentProfile = profileDoc.exists() ? profileDoc.data() : null;
         userInfo.textContent = currentProfile ? `@${currentProfile.username}` : "Logged in";
-
         listenPosts();
       } else {
         logoutBtn.style.display = "none";
@@ -250,7 +220,6 @@
       if (!u) return alert("Username required");
       try {
         const cred = await createUserWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
-        // Save username in profiles collection
         await setDoc(doc(db, "profiles", cred.user.uid), {
           username: u,
           createdAt: serverTimestamp(),
@@ -289,19 +258,18 @@
       postBtn.disabled = false;
     };
 
-    // Listen for posts updates
     function listenPosts() {
       const postsQuery = query(collection(db, "posts"), orderBy("createdAt", "desc"));
       onSnapshot(postsQuery, snapshot => {
         allPosts = [];
         snapshot.forEach(docSnap => {
-          allPosts.push({ id: docSnap.id, ...docSnap.data() });
+          const data = docSnap.data();
+          allPosts.push({ id: docSnap.id, ...data });
         });
         renderPosts(allPosts);
       });
     }
 
-    // Render posts with optional filter
     function renderPosts(posts) {
       const filter = searchInput.value.trim().toLowerCase();
       feed.innerHTML = "";
@@ -315,60 +283,50 @@
       }
     }
 
-    searchInput.oninput = () => {
-      renderPosts(allPosts);
-    };
+    searchInput.oninput = () => renderPosts(allPosts);
 
     function createPostElement(post) {
       const div = document.createElement("div");
       div.className = "post";
 
-      // Meta
       const meta = document.createElement("div");
       meta.className = "meta";
+      const dateStr = post.createdAt?.toDate ? post.createdAt.toDate().toLocaleString() : "(no date)";
       meta.innerHTML = `
-        <span><strong>@${post.username}</strong></span>
-        <span>${post.createdAt?.toDate ? post.createdAt.toDate().toLocaleString() : "..."}</span>
+        <span><strong>@${post.username || "anon"}</strong></span>
+        <span>${dateStr}</span>
       `;
       div.appendChild(meta);
 
-      // Text
       const text = document.createElement("p");
       text.textContent = post.text;
       div.appendChild(text);
 
-      // Hashtag share link
       const hashtagLink = document.createElement("a");
       hashtagLink.href = `#${post.id}`;
       hashtagLink.className = "btn-hashtag";
       hashtagLink.textContent = `#${post.id.slice(0,6)}`;
       div.appendChild(hashtagLink);
 
-      // Buttons container
       const btns = document.createElement("div");
       btns.className = "buttons";
 
-      // Like button
       const btnLike = document.createElement("button");
       btnLike.className = "btn-like";
-      btnLike.textContent = `Like (${post.likes ? post.likes.length : 0})`;
-      if (currentUser && post.likes && post.likes.includes(currentUser.uid)) {
+      btnLike.textContent = `Like (${post.likes?.length || 0})`;
+      if (currentUser && post.likes?.includes(currentUser.uid)) {
         btnLike.classList.add("liked");
       }
       btnLike.onclick = async () => {
         if (!currentUser) return alert("Log in to like posts.");
         const postRef = doc(db, "posts", post.id);
         const likesSet = new Set(post.likes || []);
-        if (likesSet.has(currentUser.uid)) {
-          likesSet.delete(currentUser.uid);
-        } else {
-          likesSet.add(currentUser.uid);
-        }
+        if (likesSet.has(currentUser.uid)) likesSet.delete(currentUser.uid);
+        else likesSet.add(currentUser.uid);
         await updateDoc(postRef, { likes: Array.from(likesSet) });
       };
       btns.appendChild(btnLike);
 
-      // Edit & Delete buttons (only for owner)
       if (currentUser && currentUser.uid === post.uid) {
         const btnEdit = document.createElement("button");
         btnEdit.className = "btn-edit";
@@ -392,87 +350,9 @@
         btns.appendChild(btnDelete);
       }
 
-      // Comment button (toggle comment box)
-      const btnComment = document.createElement("button");
-      btnComment.className = "btn-comment";
-      btnComment.textContent = `Comments (${post.comments ? post.comments.length : 0})`;
-      btns.appendChild(btnComment);
-
       div.appendChild(btns);
-
-      // Comments section (initially hidden)
-      const commentBox = document.createElement("div");
-      commentBox.className = "comment-box";
-      commentBox.style.display = "none";
-
-      // Input and button to add comment
-      const commentInput = document.createElement("input");
-      commentInput.type = "text";
-      commentInput.placeholder = "Add comment...";
-      commentInput.disabled = !currentUser;
-
-      const commentAddBtn = document.createElement("button");
-      commentAddBtn.textContent = "Post";
-      commentAddBtn.disabled = !currentUser;
-
-      commentAddBtn.onclick = async () => {
-        const commentText = commentInput.value.trim();
-        if (!commentText) return alert("Comment cannot be empty.");
-        const postRef = doc(db, "posts", post.id);
-        await updateDoc(postRef, {
-          comments: [...(post.comments || []), {
-            uid: currentUser.uid,
-            username: currentProfile ? currentProfile.username : "anon",
-            text: commentText,
-            createdAt: serverTimestamp()
-          }]
-        });
-        commentInput.value = "";
-      };
-
-      commentBox.appendChild(commentInput);
-      commentBox.appendChild(commentAddBtn);
-
-      // Show existing comments
-      function renderComments() {
-        // Clear previous comments
-        commentBox.querySelectorAll(".comment").forEach(c => c.remove());
-        if (!post.comments) return;
-        for (const c of post.comments) {
-          const cdiv = document.createElement("div");
-          cdiv.className = "comment";
-          const dateStr = c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString() : "...";
-          cdiv.textContent = `@${c.username}: ${c.text} (${dateStr})`;
-          commentBox.appendChild(cdiv);
-        }
-      }
-      renderComments();
-
-      btnComment.onclick = () => {
-        commentBox.style.display = commentBox.style.display === "none" ? "block" : "none";
-      };
-
-      div.appendChild(commentBox);
-
       return div;
     }
-
-    // On load, check if URL hash matches a post ID to scroll to it
-    window.addEventListener("hashchange", () => {
-      const id = location.hash.substring(1);
-      if (!id) return;
-      const postEl = [...feed.children].find(div => div.querySelector(".btn-hashtag").href.endsWith("#" + id));
-      if (postEl) {
-        postEl.scrollIntoView({ behavior: "smooth", block: "center" });
-        postEl.style.border = "2px solid #1da1f2";
-        setTimeout(() => postEl.style.border = "", 3000);
-      }
-    });
-
-    // Trigger on initial load
-    window.dispatchEvent(new Event("hashchange"));
-
   </script>
-
 </body>
 </html>

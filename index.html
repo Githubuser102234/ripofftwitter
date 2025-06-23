@@ -95,12 +95,11 @@
       if (!username) return alert("Username required");
       try {
         const cred = await createUserWithEmailAndPassword(auth, email, password);
-        await addDoc(collection(db, "profiles"), {
-          uid: cred.user.uid,
-          email,
-          username,
-          createdAt: serverTimestamp()
-        });
+        await setDoc(doc(db, "profiles", cred.user.uid), {
+  email,
+  username,
+  createdAt: serverTimestamp()
+});
       } catch (e) {
         alert(e.message);
       }

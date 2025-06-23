@@ -1,14 +1,13 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
+  <meta charset="UTF-8" />
   <title>Ripoff Twitter</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
   <style>
     body {
       font-family: Arial, sans-serif;
-      margin: 0;
-      padding: 0;
+      margin: 0; padding: 0;
       background: #f2f2f2;
     }
     header {
@@ -18,20 +17,26 @@
       display: flex;
       align-items: center;
       justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
     }
     header h1 {
       font-size: 1.3rem;
       margin: 0;
+      flex-shrink: 0;
     }
     #searchInput {
-      flex: 1;
-      margin-left: 12px;
-      padding: 8px;
+      flex-grow: 1;
+      min-width: 150px;
+      padding: 8px 12px;
       border-radius: 20px;
       border: none;
+      font-size: 1rem;
     }
     #feed {
       padding: 8px;
+      max-width: 600px;
+      margin: auto;
     }
     .post {
       background: white;
@@ -39,11 +44,16 @@
       padding: 12px;
       margin: 12px 0;
       box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      word-wrap: break-word;
     }
     .meta {
       font-size: 0.85rem;
       color: #555;
       margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 8px;
     }
     .buttons {
       display: flex;
@@ -59,19 +69,29 @@
       border-radius: 4px;
       font-size: 0.9rem;
       cursor: pointer;
+      white-space: nowrap;
     }
     .btn-like { background: #e1f5fe; }
     .btn-like.liked { background: #81d4fa; }
     .btn-edit { background: #fff9c4; }
     .btn-delete { background: #ffcdd2; }
     .btn-comment { background: #dcedc8; }
-    .btn-hashtag { background: #c8e6c9; }
+    .btn-hashtag {
+      background: #c8e6c9;
+      text-decoration: none;
+      color: #2e7d32;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-weight: bold;
+      cursor: pointer;
+    }
     #auth, #postForm {
       background: white;
       padding: 12px;
-      margin: 12px;
+      margin: 12px auto;
       border-radius: 8px;
       box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+      max-width: 600px;
     }
     input, textarea, button {
       font-size: 1rem;
@@ -79,6 +99,11 @@
     input, textarea {
       border: 1px solid #ccc;
       border-radius: 4px;
+      padding: 8px;
+      width: 100%;
+      box-sizing: border-box;
+      margin-bottom: 8px;
+      resize: vertical;
     }
     button {
       background: #1da1f2;
@@ -86,9 +111,48 @@
       border: none;
       border-radius: 4px;
       padding: 10px;
+      cursor: pointer;
     }
-    @media (max-width: 400px) {
-      .buttons { flex-direction: column; }
+    button:disabled {
+      background: #a0cfff;
+      cursor: default;
+    }
+    .comment-box {
+      margin-top: 12px;
+      border-top: 1px solid #ddd;
+      padding-top: 8px;
+    }
+    .comment-box input[type="text"] {
+      width: calc(100% - 70px);
+      display: inline-block;
+      margin-right: 6px;
+      padding: 6px;
+      font-size: 0.9rem;
+    }
+    .comment-box button {
+      width: 60px;
+      padding: 6px;
+      font-size: 0.9rem;
+    }
+    .comment {
+      font-size: 0.85rem;
+      color: #444;
+      margin-top: 4px;
+      padding-left: 6px;
+      border-left: 2px solid #1da1f2;
+      word-wrap: break-word;
+    }
+    @media (max-width: 420px) {
+      .buttons {
+        flex-direction: column;
+      }
+      header {
+        flex-direction: column;
+        align-items: stretch;
+      }
+      #searchInput {
+        margin-top: 8px;
+      }
     }
   </style>
 </head>
@@ -96,17 +160,17 @@
 
   <header>
     <h1>Ripoff Twitter</h1>
-    <input id="searchInput" type="text" placeholder="Search posts...">
+    <input id="searchInput" type="text" placeholder="Search posts..." autocomplete="off" />
   </header>
 
   <div id="auth">
-    <input id="email" type="email" placeholder="Email">
-    <input id="password" type="password" placeholder="Password">
-    <input id="username" type="text" placeholder="Username (for sign up)">
+    <input id="email" type="email" placeholder="Email" autocomplete="username" />
+    <input id="password" type="password" placeholder="Password" autocomplete="current-password" />
+    <input id="username" type="text" placeholder="Username (for sign up)" autocomplete="off" />
     <button id="signupBtn">Sign Up</button>
     <button id="loginBtn">Log In</button>
     <button id="logoutBtn" style="display:none">Log Out</button>
-    <p id="user-info"></p>
+    <p id="user-info">Not logged in</p>
   </div>
 
   <div id="postForm" style="display:none">
@@ -122,13 +186,24 @@
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
     import {
       getFirestore, doc, collection, addDoc, setDoc, query, orderBy,
-      onSnapshot, updateDoc, deleteDoc, getDoc, serverTimestamp, arrayUnion, arrayRemove
+      onSnapshot, updateDoc, deleteDoc, getDoc, serverTimestamp
     } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
-    const firebaseConfig = { /* your config */ };
+    // Your Firebase config
+    const firebaseConfig = {
+      apiKey: "AIzaSyBM0p_RMFnR_scPKrDrKUPOBB0IkQz73ds",
+      authDomain: "ripofftwitter-eb939.firebaseapp.com",
+      projectId: "ripofftwitter-eb939",
+      storageBucket: "ripofftwitter-eb939.firebasestorage.app",
+      messagingSenderId: "1062506746667",
+      appId: "1:1062506746667:web:7d8da60ed0d5678e732b6e",
+      measurementId: "G-YVMHCFYT8H"
+    };
+
     const app = initializeApp(firebaseConfig);
     getAnalytics(app);
-    const auth = getAuth(), db = getFirestore(app);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
 
     const emailInput = document.getElementById("email");
     const passwordInput = document.getElementById("password");
@@ -142,24 +217,31 @@
     const feed = document.getElementById("feed");
     const searchInput = document.getElementById("searchInput");
 
-    let currentUser = null, currentProfile = null, allPosts = [];
+    let currentUser = null;
+    let currentProfile = null;
+    let allPosts = [];
 
+    // Listen for auth changes
     onAuthStateChanged(auth, async user => {
       currentUser = user;
       if (user) {
-        logoutBtn.style.display = "block";
+        logoutBtn.style.display = "inline-block";
         loginBtn.style.display = signupBtn.style.display = "none";
-        postText.parentNode.style.display = "block";
-        const d = await getDoc(doc(db, "profiles", user.uid));
-        currentProfile = d.exists() ? d.data() : null;
-        userInfo.textContent = currentProfile ? `@${currentProfile.username}` : '';
+        document.getElementById("postForm").style.display = "block";
+
+        // Load profile
+        const profileDoc = await getDoc(doc(db, "profiles", user.uid));
+        currentProfile = profileDoc.exists() ? profileDoc.data() : null;
+        userInfo.textContent = currentProfile ? `@${currentProfile.username}` : "Logged in";
+
         listenPosts();
       } else {
         logoutBtn.style.display = "none";
-        loginBtn.style.display = signupBtn.style.display = "block";
-        postText.parentNode.style.display = "none";
-        userInfo.textContent = 'Not logged in';
-        feed.innerHTML = '';
+        loginBtn.style.display = signupBtn.style.display = "inline-block";
+        document.getElementById("postForm").style.display = "none";
+        userInfo.textContent = "Not logged in";
+        feed.innerHTML = "";
+        allPosts = [];
       }
     });
 
@@ -168,69 +250,229 @@
       if (!u) return alert("Username required");
       try {
         const cred = await createUserWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
-        await setDoc(doc(db, "profiles", cred.user.uid), { email: emailInput.value, username: u, createdAt: serverTimestamp() });
-      } catch (e) { alert(e.message); }
+        // Save username in profiles collection
+        await setDoc(doc(db, "profiles", cred.user.uid), {
+          username: u,
+          createdAt: serverTimestamp(),
+          bio: "",
+          nickname: ""
+        });
+        alert("Signed up!");
+      } catch(e) {
+        alert(e.message);
+      }
     };
 
-    loginBtn.onclick = async () => {
-      try { await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value); }
-      catch (e) { alert(e.message); }
+    loginBtn.onclick = () => {
+      signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value).catch(e => alert(e.message));
     };
 
     logoutBtn.onclick = () => signOut(auth);
 
     postBtn.onclick = async () => {
       const text = postText.value.trim();
-      if (!text || !currentUser || !currentProfile) return;
+      if (!text) return alert("Post cannot be empty");
+      postBtn.disabled = true;
       try {
-        const docRef = await addDoc(collection(db, "posts"), {
-          content: text, userId: currentUser.uid, username: currentProfile.username,
-          likes: [], comments: [], createdAt: serverTimestamp()
+        await addDoc(collection(db, "posts"), {
+          text,
+          uid: currentUser.uid,
+          username: currentProfile ? currentProfile.username : "anon",
+          createdAt: serverTimestamp(),
+          likes: [],
+          comments: []
         });
         postText.value = "";
-      } catch (e) { alert("Failed: " + e.message); }
+      } catch(e) {
+        alert(e.message);
+      }
+      postBtn.disabled = false;
     };
 
+    // Listen for posts updates
     function listenPosts() {
-      const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
-      onSnapshot(q, snap => {
-        allPosts = snap.docs.map(d => ({ id:d.id, ...d.data() }));
-        renderPosts();
+      const postsQuery = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+      onSnapshot(postsQuery, snapshot => {
+        allPosts = [];
+        snapshot.forEach(docSnap => {
+          allPosts.push({ id: docSnap.id, ...docSnap.data() });
+        });
+        renderPosts(allPosts);
       });
     }
 
-    searchInput.oninput = () => renderPosts(searchInput.value.toLowerCase());
-
-    function renderPosts(filter='') {
-      feed.innerHTML = '';
-      allPosts.filter(p => p.content.toLowerCase().includes(filter) || p.username.toLowerCase().includes(filter))
-        .forEach(p => feed.appendChild(createPostEl(p)));
+    // Render posts with optional filter
+    function renderPosts(posts) {
+      const filter = searchInput.value.trim().toLowerCase();
+      feed.innerHTML = "";
+      const filtered = posts.filter(p => p.text.toLowerCase().includes(filter));
+      if (filtered.length === 0) {
+        feed.innerHTML = `<p style="text-align:center; color:#888;">No posts found.</p>`;
+        return;
+      }
+      for (const post of filtered) {
+        feed.appendChild(createPostElement(post));
+      }
     }
 
-    function createPostEl(p) {
-      const el = document.createElement("div"); el.className = "post";
-      const liked = currentUser && p.likes.includes(currentUser.uid);
-      const permalink = `${location.origin}${location.pathname}#${p.id}`;
-      el.innerHTML = `
-        <div class="meta"><strong>@${p.username}</strong> • <a href="${permalink}" class="btn-hashtag">#${p.id.slice(0, 6)}</a></div>
-        <div>${p.content}</div>
-        <div class="buttons">
-          <button class="btn-like ${liked?'liked':''}" onclick="toggleLike('${p.id}')">${liked?'Unlike':'Like'} (${p.likes.length})</button>
-          ${currentUser && p.userId===currentUser.uid ? `<button class="btn-edit" onclick="editPost('${p.id}','${escapeJS(p.content)}')">Edit</button><button class="btn-delete" onclick="deletePost('${p.id}')">Delete</button>` : ''}
-        </div>
-        <div class="comment-box">
-          <input type="text" id="comment-${p.id}" placeholder="Reply...">
-          <button class="btn-comment" onclick="addComment('${p.id}')">Reply</button>
-          ${(p.comments||[]).map(c=>`<div class="comment"><strong>@${c.by}</strong>: ${c.text}</div>`).join('')}
-        </div>`;
-      return el;
+    searchInput.oninput = () => {
+      renderPosts(allPosts);
+    };
+
+    function createPostElement(post) {
+      const div = document.createElement("div");
+      div.className = "post";
+
+      // Meta
+      const meta = document.createElement("div");
+      meta.className = "meta";
+      meta.innerHTML = `
+        <span><strong>@${post.username}</strong></span>
+        <span>${post.createdAt?.toDate ? post.createdAt.toDate().toLocaleString() : "..."}</span>
+      `;
+      div.appendChild(meta);
+
+      // Text
+      const text = document.createElement("p");
+      text.textContent = post.text;
+      div.appendChild(text);
+
+      // Hashtag share link
+      const hashtagLink = document.createElement("a");
+      hashtagLink.href = `#${post.id}`;
+      hashtagLink.className = "btn-hashtag";
+      hashtagLink.textContent = `#${post.id.slice(0,6)}`;
+      div.appendChild(hashtagLink);
+
+      // Buttons container
+      const btns = document.createElement("div");
+      btns.className = "buttons";
+
+      // Like button
+      const btnLike = document.createElement("button");
+      btnLike.className = "btn-like";
+      btnLike.textContent = `Like (${post.likes ? post.likes.length : 0})`;
+      if (currentUser && post.likes && post.likes.includes(currentUser.uid)) {
+        btnLike.classList.add("liked");
+      }
+      btnLike.onclick = async () => {
+        if (!currentUser) return alert("Log in to like posts.");
+        const postRef = doc(db, "posts", post.id);
+        const likesSet = new Set(post.likes || []);
+        if (likesSet.has(currentUser.uid)) {
+          likesSet.delete(currentUser.uid);
+        } else {
+          likesSet.add(currentUser.uid);
+        }
+        await updateDoc(postRef, { likes: Array.from(likesSet) });
+      };
+      btns.appendChild(btnLike);
+
+      // Edit & Delete buttons (only for owner)
+      if (currentUser && currentUser.uid === post.uid) {
+        const btnEdit = document.createElement("button");
+        btnEdit.className = "btn-edit";
+        btnEdit.textContent = "Edit";
+        btnEdit.onclick = () => {
+          const newText = prompt("Edit your post:", post.text);
+          if (newText !== null && newText.trim()) {
+            updateDoc(doc(db, "posts", post.id), { text: newText.trim() });
+          }
+        };
+        btns.appendChild(btnEdit);
+
+        const btnDelete = document.createElement("button");
+        btnDelete.className = "btn-delete";
+        btnDelete.textContent = "Delete";
+        btnDelete.onclick = () => {
+          if (confirm("Delete this post?")) {
+            deleteDoc(doc(db, "posts", post.id));
+          }
+        };
+        btns.appendChild(btnDelete);
+      }
+
+      // Comment button (toggle comment box)
+      const btnComment = document.createElement("button");
+      btnComment.className = "btn-comment";
+      btnComment.textContent = `Comments (${post.comments ? post.comments.length : 0})`;
+      btns.appendChild(btnComment);
+
+      div.appendChild(btns);
+
+      // Comments section (initially hidden)
+      const commentBox = document.createElement("div");
+      commentBox.className = "comment-box";
+      commentBox.style.display = "none";
+
+      // Input and button to add comment
+      const commentInput = document.createElement("input");
+      commentInput.type = "text";
+      commentInput.placeholder = "Add comment...";
+      commentInput.disabled = !currentUser;
+
+      const commentAddBtn = document.createElement("button");
+      commentAddBtn.textContent = "Post";
+      commentAddBtn.disabled = !currentUser;
+
+      commentAddBtn.onclick = async () => {
+        const commentText = commentInput.value.trim();
+        if (!commentText) return alert("Comment cannot be empty.");
+        const postRef = doc(db, "posts", post.id);
+        await updateDoc(postRef, {
+          comments: [...(post.comments || []), {
+            uid: currentUser.uid,
+            username: currentProfile ? currentProfile.username : "anon",
+            text: commentText,
+            createdAt: serverTimestamp()
+          }]
+        });
+        commentInput.value = "";
+      };
+
+      commentBox.appendChild(commentInput);
+      commentBox.appendChild(commentAddBtn);
+
+      // Show existing comments
+      function renderComments() {
+        // Clear previous comments
+        commentBox.querySelectorAll(".comment").forEach(c => c.remove());
+        if (!post.comments) return;
+        for (const c of post.comments) {
+          const cdiv = document.createElement("div");
+          cdiv.className = "comment";
+          const dateStr = c.createdAt?.toDate ? c.createdAt.toDate().toLocaleString() : "...";
+          cdiv.textContent = `@${c.username}: ${c.text} (${dateStr})`;
+          commentBox.appendChild(cdiv);
+        }
+      }
+      renderComments();
+
+      btnComment.onclick = () => {
+        commentBox.style.display = commentBox.style.display === "none" ? "block" : "none";
+      };
+
+      div.appendChild(commentBox);
+
+      return div;
     }
 
-    window.toggleLike = async id => { /* same as before */ };
-    window.editPost = async (id, text) => { /* same */ };
-    window.deletePost = async id => { /* same */ };
-    window.addComment = async id => { /* same */ };
-    function escapeJS(s){ return s.replace(/'/g,"\\'").replace(/"/g,"&quot;"); }
+    // On load, check if URL hash matches a post ID to scroll to it
+    window.addEventListener("hashchange", () => {
+      const id = location.hash.substring(1);
+      if (!id) return;
+      const postEl = [...feed.children].find(div => div.querySelector(".btn-hashtag").href.endsWith("#" + id));
+      if (postEl) {
+        postEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        postEl.style.border = "2px solid #1da1f2";
+        setTimeout(() => postEl.style.border = "", 3000);
+      }
+    });
+
+    // Trigger on initial load
+    window.dispatchEvent(new Event("hashchange"));
+
   </script>
+
 </body>
 </html>

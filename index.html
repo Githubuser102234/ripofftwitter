@@ -66,6 +66,12 @@
       padding-top: 5px;
       margin-top: 5px;
     }
+    .reply {
+      margin-left: 15px;
+      font-size: 0.8em;
+      border-left: 2px solid #ccc;
+      padding-left: 10px;
+    }
     .btn-inline {
       width: auto;
       display: inline-block;
@@ -215,7 +221,22 @@
     function formatTimestamp(ts) {
       if (!ts) return "";
       const date = ts.toDate();
-      return date.toLocaleString(); // or use date.toLocaleDateString() if you prefer only date
+      return date.toLocaleString();
+    }
+
+    function renderComments(comments, postId) {
+      return comments.map((c, i) => `
+        <div class="comment">
+          <strong>@${c.by}:</strong> ${c.text}
+          <div class="reply">
+            ${(c.replies || []).map(r => `
+              <div><strong>@${r.by}:</strong> ${r.text}</div>
+            `).join("")}
+            <input type="text" id="reply-${postId}-${i}" placeholder="Reply to @${c.by}">
+            <button class="btn-inline" onclick="replyToComment('${postId}', ${i})">Reply</button>
+          </div>
+        </div>
+      `).join("");
     }
 
     function loadPosts() {
@@ -238,7 +259,7 @@
             <div class="comment-box">
               <input type="text" id="comment-${id}" placeholder="Reply...">
               <button class="btn-inline" onclick="addComment('${id}')">Reply</button>
-              <div>${(p.comments || []).map(c => `<div class="comment"><strong>@${c.by}:</strong> ${c.text}</div>`).join("")}</div>
+              <div>${renderComments(p.comments || [], id)}</div>
             </div>`;
           feed.appendChild(div);
         });
@@ -266,9 +287,28 @@
       const t = inp.value.trim();
       if (!t) return;
       await updateDoc(doc(db, "posts", id), {
-        comments: arrayUnion({ by: currentProfile.username, text: t })
+        comments: arrayUnion({ by: currentProfile.username, text: t, replies: [] })
       });
       inp.value = "";
+    };
+
+    window.replyToComment = async (postId, commentIndex) => {
+      const ref = doc(db, "posts", postId);
+      const snap = await getDoc(ref);
+      const data = snap.data();
+      const comments = data.comments || [];
+      const input = document.getElementById(`reply-${postId}-${commentIndex}`);
+      const replyText = input.value.trim();
+      if (!replyText) return;
+
+      const updatedReplies = (comments[commentIndex].replies || []).concat({
+        by: currentProfile.username,
+        text: replyText
+      });
+      comments[commentIndex].replies = updatedReplies;
+
+      await updateDoc(ref, { comments });
+      input.value = "";
     };
   </script>
 </body>

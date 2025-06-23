@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ripoff Twitter</title>
+  <style>
+    body { font-family: Arial; margin: 20px; max-width: 600px; }
+    .post { border: 1px solid #ccc; padding: 10px; margin: 10px 0; }
+    .meta { font-size: 0.9em; color: #555; }
+    textarea { width: 100%; }
+    .comment-box { margin-top: 10px; }
+    .comment { font-size: 0.9em; border-top: 1px dashed #ccc; padding-top: 5px; margin-top: 5px; }
+    button { margin-top: 5px; }
+  </style>
+</head>
+<body>
+  <h2>Ripoff Twitter</h2>
+
+  <!-- Auth Section -->
+  <div id="auth">
+    <input id="email" placeholder="Email" type="email">
+    <input id="password" placeholder="Password" type="password">
+    <button onclick="signup()">Sign Up</button>
+    <button onclick="login()">Login</button>
+    <button onclick="logout()">Logout</button>
+  </div>
+
+  <p id="user-info"></p>
+
+  <!-- Post Section -->
+  <div id="postForm" style="display:none;">
+    <textarea id="postText" placeholder="What's happening?"></textarea>
+    <button onclick="createPost()">Post</button>
+  </div>
+
+  <!-- Feed -->
+  <div id="feed"></div>
+
+  <!-- Firebase SDKs -->
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+    import { getFirestore, collection, addDoc, query, orderBy, onSnapshot, doc, deleteDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBM0p_RMFnR_scPKrDrKUPOBB0IkQz73ds",
+      authDomain: "ripofftwitter-eb939.firebaseapp.com",
+      projectId: "ripofftwitter-eb939",
+      storageBucket: "ripofftwitter-eb939.firebasestorage.app",
+      messagingSenderId: "1062506746667",
+      appId: "1:1062506746667:web:7d8da60ed0d5678e732b6e",
+      measurementId: "G-YVMHCFYT8H"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const analytics = getAnalytics(app);
+    const auth = getAuth();
+    const db = getFirestore(app);
+
+    let currentUser = null;
+
+    onAuthStateChanged(auth, user => {
+      currentUser = user;
+      document.getElementById('postForm').style.display = user ? 'block' : 'none';
+      document.getElementById('user-info').textContent = user ? `Logged in as ${user.email}` : 'Not logged in';
+      if (user) loadPosts();
+      else document.getElementById('feed').innerHTML = '';
+    });
+
+    window.signup = async () => {
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      try {
+        await createUserWithEmailAndPassword(auth, email, password);
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    window.login = async () => {
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      try {
+        await signInWithEmailAndPassword(auth, email, password);
+      } catch (e) {
+        alert(e.message);
+      }
+    }
+
+    window.logout = async () => {
+      await signOut(auth);
+    }
+
+    window.createPost = async () => {
+      const text = postText.value.trim();
+      if (!text) return;
+      await addDoc(collection(db, "posts"), {
+        content: text,
+        userEmail: currentUser.email,
+        userId: currentUser.uid,
+        likes: [],
+        comments: [],
+        createdAt: serverTimestamp()
+      });
+      postText.value = "";
+    }
+
+    function loadPosts() {
+      const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+      onSnapshot(q, snapshot => {
+        const feed = document.getElementById("feed");
+        feed.innerHTML = "";
+        snapshot.forEach(docSnap => {
+          const post = docSnap.data();
+          const id = docSnap.id;
+          const div = document.createElement("div");
+          div.className = "post";
+
+          const likeLabel = post.likes.includes(currentUser.uid) ? "Unlike" : "Like";
+
+          div.innerHTML = `
+            <div class="meta"><strong>${post.userEmail}</strong></div>
+            <div>${post.content}</div>
+            <button onclick="toggleLike('${id}')">${likeLabel} (${post.likes.length})</button>
+            ${post.userId === currentUser.uid ? `
+              <button onclick="editPost('${id}', '${post.content.replace(/'/g, "\\'")}')">Edit</button>
+              <button onclick="deletePost('${id}')">Delete</button>` : ''
+            }
+            <div class="comment-box">
+              <input type="text" id="comment-${id}" placeholder="Comment...">
+              <button onclick="addComment('${id}')">Add</button>
+              <div>
+                ${(post.comments || []).map(c => `<div class="comment"><strong>${c.by}:</strong> ${c.text}</div>`).join('')}
+              </div>
+            </div>
+          `;
+          feed.appendChild(div);
+        });
+      });
+    }
+
+    window.toggleLike = async (id) => {
+      const ref = doc(db, "posts", id);
+      const post = (await (await getDoc(ref))).data();
+      const update = post.likes.includes(currentUser.uid)
+        ? arrayRemove(currentUser.uid)
+        : arrayUnion(currentUser.uid);
+      await updateDoc(ref, { likes: update });
+    }
+
+    window.editPost = async (id, oldContent) => {
+      const newContent = prompt("Edit your post:", oldContent);
+      if (newContent !== null) {
+        await updateDoc(doc(db, "posts", id), { content: newContent });
+      }
+    }
+
+    window.deletePost = async (id) => {
+      if (confirm("Delete this post?")) {
+        await deleteDoc(doc(db, "posts", id));
+      }
+    }
+
+    window.addComment = async (id) => {
+      const input = document.getElementById(`comment-${id}`);
+      const text = input.value.trim();
+      if (!text) return;
+      const ref = doc(db, "posts", id);
+      await updateDoc(ref, {
+        comments: arrayUnion({ text, by: currentUser.email })
+      });
+      input.value = "";
+    }
+  </script>
+</body>
+</html>

@@ -65,12 +65,14 @@
       border-top: 1px dashed #ddd;
       padding-top: 5px;
       margin-top: 5px;
+      position: relative;
     }
     .reply {
       margin-left: 15px;
       font-size: 0.8em;
       border-left: 2px solid #ccc;
       padding-left: 10px;
+      position: relative;
     }
     .btn-inline {
       width: auto;
@@ -80,6 +82,16 @@
     }
     input[type="text"] {
       margin-top: 5px;
+    }
+    .delete-btn {
+      background-color: #e0245e;
+      padding: 2px 6px;
+      font-size: 0.75em;
+      border-radius: 4px;
+      margin-left: 10px;
+    }
+    .delete-btn:hover {
+      background-color: #b71c3f;
     }
     @media (max-width: 600px) {
       body {
@@ -119,7 +131,7 @@
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
     import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
     import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
-    import { getFirestore, doc, collection, addDoc, query, orderBy, onSnapshot, updateDoc, deleteDoc, getDoc, setDoc, serverTimestamp, arrayUnion, arrayRemove } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+    import { getFirestore, doc, collection, addDoc, query, orderBy, onSnapshot, updateDoc, deleteDoc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
 
     const firebaseConfig = {
       apiKey: "AIzaSyBM0p_RMFnR_scPKrDrKUPOBB0IkQz73ds",
@@ -161,6 +173,7 @@
           currentProfile = profDoc.data();
           userInfo.textContent = `@${currentProfile.username}`;
         } else {
+          currentProfile = null;
           userInfo.textContent = `No profile found`;
         }
         loadPosts();
@@ -170,6 +183,7 @@
         postForm.style.display = "none";
         userInfo.textContent = "Not logged in";
         feed.innerHTML = "";
+        currentProfile = null;
       }
     });
 
@@ -225,19 +239,43 @@
     }
 
     function renderComments(comments, postId) {
-      return comments.map((c, i) => `
+      return comments.map((c, i) => {
+        const replies = c.replies || [];
+        return `
         <div class="comment">
           <strong>@${c.by}:</strong> ${c.text}
+          ${currentProfile && c.by === currentProfile.username ? `<button class="btn-inline delete-btn" onclick="deleteComment('${postId}', ${i})">Delete</button>` : ''}
           <div class="reply">
-            ${(c.replies || []).map(r => `
-              <div><strong>@${r.by}:</strong> ${r.text}</div>
-            `).join("")}
+            <button id="toggle-replies-${postId}-${i}" class="btn-inline" onclick="toggleReplies('${postId}', ${i})">
+              Show ${replies.length} repl${replies.length === 1 ? 'y' : 'ies'}
+            </button>
+            <div id="replies-${postId}-${i}" style="display:none; margin-top:5px;">
+              ${replies.map((r, ri) => `
+                <div>
+                  <strong>@${r.by}:</strong> ${r.text}
+                  ${currentProfile && r.by === currentProfile.username ? `<button class="btn-inline delete-btn" onclick="deleteReply('${postId}', ${i}, ${ri})">Delete</button>` : ''}
+                </div>
+              `).join("")}
+            </div>
             <input type="text" id="reply-${postId}-${i}" placeholder="Reply to @${c.by}">
             <button class="btn-inline" onclick="replyToComment('${postId}', ${i})">Reply</button>
           </div>
         </div>
-      `).join("");
+      `;
+      }).join("");
     }
+
+    window.toggleReplies = (postId, commentIndex) => {
+      const repliesDiv = document.getElementById(`replies-${postId}-${commentIndex}`);
+      const btn = document.getElementById(`toggle-replies-${postId}-${commentIndex}`);
+      const visible = repliesDiv.style.display === 'block';
+      repliesDiv.style.display = visible ? 'none' : 'block';
+      btn.textContent = `${visible ? 'Show' : 'Hide'} ${repliesDiv.children.length} repl${repliesDiv.children.length === 1 ? 'y' : 'ies'}`;
+    };
+
+    window.renderPosts = () => {
+      // no-op, placeholder
+    };
 
     function loadPosts() {
       const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
@@ -257,58 +295,110 @@
               <button class="btn-inline" onclick="editPost('${id}', \`${p.content}\`)">Edit</button>
               <button class="btn-inline" onclick="deletePost('${id}')">Delete</button>` : ''}
             <div class="comment-box">
-              <input type="text" id="comment-${id}" placeholder="Reply...">
-              <button class="btn-inline" onclick="addComment('${id}')">Reply</button>
-              <div>${renderComments(p.comments || [], id)}</div>
+              <button id="toggle-comments-${id}" class="btn-inline" onclick="toggleComments('${id}')">
+                Show ${ (p.comments || []).length } comment${ (p.comments || []).length === 1 ? '' : 's' }
+              </button>
+              <div id="comments-${id}" style="display:none; margin-top:5px;">
+                <input type="text" id="comment-${id}" placeholder="Reply...">
+                <button class="btn-inline" onclick="addComment('${id}')">Reply</button>
+                ${renderComments(p.comments || [], id)}
+              </div>
             </div>`;
           feed.appendChild(div);
         });
       });
     }
 
-    window.toggleLike = async id => {
-      const ref = doc(db, "posts", id);
-      const snap = await getDoc(ref);
-      const arr = snap.data().likes;
-      await updateDoc(ref, {
-        likes: arr.includes(currentUser.uid) ? arrayRemove(currentUser.uid) : arrayUnion(currentUser.uid)
-      });
+    window.toggleComments = (postId) => {
+      const commentsDiv = document.getElementById(`comments-${postId}`);
+      const btn = document.getElementById(`toggle-comments-${postId}`);
+      const visible = commentsDiv.style.display === 'block';
+      commentsDiv.style.display = visible ? 'none' : 'block';
+      const count = commentsDiv.querySelectorAll('.comment').length;
+      btn.textContent = `${visible ? 'Show' : 'Hide'} ${count} comment${count === 1 ? '' : 's'}`;
     };
 
-    window.editPost = async (id, oldText) => {
-      const nv = prompt("Edit:", oldText);
-      if (nv !== null) await updateDoc(doc(db, "posts", id), { content: nv });
+    window.toggleLike = async (postId) => {
+      if (!currentUser) return alert("Log in first");
+      const postRef = doc(db, "posts", postId);
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) return;
+      const data = postSnap.data();
+      const likes = data.likes || [];
+      const idx = likes.indexOf(currentUser.uid);
+      if (idx >= 0) likes.splice(idx, 1);
+      else likes.push(currentUser.uid);
+      await updateDoc(postRef, { likes });
     };
 
-    window.deletePost = id => confirm("Delete?") && deleteDoc(doc(db, "posts", id));
-
-    window.addComment = async id => {
-      const inp = document.getElementById(`comment-${id}`);
-      const t = inp.value.trim();
-      if (!t) return;
-      await updateDoc(doc(db, "posts", id), {
-        comments: arrayUnion({ by: currentProfile.username, text: t, replies: [] })
-      });
-      inp.value = "";
+    window.addComment = async (postId) => {
+      if (!currentUser || !currentProfile) return alert("Log in first");
+      const input = document.getElementById(`comment-${postId}`);
+      const text = input.value.trim();
+      if (!text) return;
+      const postRef = doc(db, "posts", postId);
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) return alert("Post missing");
+      const comments = postSnap.data().comments || [];
+      comments.push({ by: currentProfile.username, text, replies: [] });
+      await updateDoc(postRef, { comments });
+      input.value = "";
     };
 
     window.replyToComment = async (postId, commentIndex) => {
-      const ref = doc(db, "posts", postId);
-      const snap = await getDoc(ref);
-      const data = snap.data();
-      const comments = data.comments || [];
+      if (!currentUser || !currentProfile) return alert("Log in first");
       const input = document.getElementById(`reply-${postId}-${commentIndex}`);
-      const replyText = input.value.trim();
-      if (!replyText) return;
-
-      const updatedReplies = (comments[commentIndex].replies || []).concat({
-        by: currentProfile.username,
-        text: replyText
-      });
-      comments[commentIndex].replies = updatedReplies;
-
-      await updateDoc(ref, { comments });
+      const text = input.value.trim();
+      if (!text) return;
+      const postRef = doc(db, "posts", postId);
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) return alert("Post missing");
+      const comments = postSnap.data().comments || [];
+      if (!comments[commentIndex]) return alert("Comment missing");
+      comments[commentIndex].replies = comments[commentIndex].replies || [];
+      comments[commentIndex].replies.push({ by: currentProfile.username, text });
+      await updateDoc(postRef, { comments });
       input.value = "";
+    };
+
+    window.deleteComment = async (postId, commentIndex) => {
+      if (!currentUser || !currentProfile) return alert("Log in first");
+      const postRef = doc(db, "posts", postId);
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) return alert("Post missing");
+      const comments = postSnap.data().comments || [];
+      if (!comments[commentIndex]) return alert("Comment missing");
+      if (comments[commentIndex].by !== currentProfile.username) return alert("Not your comment");
+      if (!confirm("Delete this comment?")) return;
+      comments.splice(commentIndex, 1);
+      await updateDoc(postRef, { comments });
+    };
+
+    window.deleteReply = async (postId, commentIndex, replyIndex) => {
+      if (!currentUser || !currentProfile) return alert("Log in first");
+      const postRef = doc(db, "posts", postId);
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) return alert("Post missing");
+      const comments = postSnap.data().comments || [];
+      if (!comments[commentIndex] || !comments[commentIndex].replies || !comments[commentIndex].replies[replyIndex]) return alert("Reply missing");
+      if (comments[commentIndex].replies[replyIndex].by !== currentProfile.username) return alert("Not your reply");
+      if (!confirm("Delete this reply?")) return;
+      comments[commentIndex].replies.splice(replyIndex, 1);
+      await updateDoc(postRef, { comments });
+    };
+
+    window.editPost = async (postId, oldContent) => {
+      const newText = prompt("Edit your post:", oldContent);
+      if (newText === null) return;
+      const trimmed = newText.trim();
+      if (!trimmed) return alert("Cannot be empty");
+      const postRef = doc(db, "posts", postId);
+      await updateDoc(postRef, { content: trimmed });
+    };
+
+    window.deletePost = async (postId) => {
+      if (!confirm("Delete this post?")) return;
+      await deleteDoc(doc(db, "posts", postId));
     };
   </script>
 </body>

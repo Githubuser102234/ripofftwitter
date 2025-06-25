@@ -50,6 +50,11 @@
       margin: 10px 0;
       box-shadow: 0 2px 4px rgba(0,0,0,0.08);
     }
+    .post img {
+      max-width: 100%;
+      margin-top: 10px;
+      border-radius: 6px;
+    }
     .meta {
       font-size: 0.9em;
       color: #555;
@@ -122,7 +127,11 @@
 
   <div id="postForm" style="display:none">
     <textarea id="postText" placeholder="What's happening?" rows="3"></textarea>
-    <button id="postBtn">Post</button>
+    <div style="display: flex; align-items: center;">
+      <button id="addImageBtn" class="btn-inline" style="width:auto; padding:5px 10px; margin:0 8px;">＋</button>
+      <input type="file" id="imageInput" accept="image/*" style="display:none">
+      <button id="postBtn" style="flex:1">Post</button>
+    </div>
   </div>
 
   <div id="feed"></div>
@@ -143,6 +152,8 @@
       measurementId: "G-YVMHCFYT8H"
     };
 
+    const IMGUR_CLIENT_ID = "72151c72c01a9d1";
+
     const app = initializeApp(firebaseConfig);
     getAnalytics(app);
     const auth = getAuth();
@@ -158,9 +169,17 @@
     const postForm = document.getElementById("postForm");
     const userInfo = document.getElementById("user-info");
     const feed = document.getElementById("feed");
+    const addImageBtn = document.getElementById("addImageBtn");
+    const imageInput = document.getElementById("imageInput");
 
     let currentUser = null;
     let currentProfile = null;
+    let selectedImageFile = null;
+
+    addImageBtn.onclick = () => imageInput.click();
+    imageInput.onchange = function() {
+      selectedImageFile = this.files[0];
+    };
 
     onAuthStateChanged(auth, async user => {
       currentUser = user;
@@ -216,10 +235,36 @@
 
     postBtn.onclick = async () => {
       const text = document.getElementById("postText").value.trim();
-      if (!text || !currentUser || !currentProfile) return;
+      if (!text && !selectedImageFile) return;
+      if (!currentUser || !currentProfile) return alert("Log in first");
+
+      let imageUrl = null;
+      if (selectedImageFile) {
+        const formData = new FormData();
+        formData.append("image", selectedImageFile);
+        try {
+          const res = await fetch("https://api.imgur.com/3/image", {
+            method: "POST",
+            headers: {
+              Authorization: `Client-ID ${IMGUR_CLIENT_ID}`
+            },
+            body: formData
+          });
+          const data = await res.json();
+          if (data.success) {
+            imageUrl = data.data.link;
+          } else {
+            console.error("Imgur upload failed", data);
+          }
+        } catch (e) {
+          console.error("Imgur upload error", e);
+        }
+      }
+
       try {
         await addDoc(collection(db, "posts"), {
           content: text,
+          imageUrl: imageUrl,
           userId: currentUser.uid,
           username: currentProfile.username,
           likes: [],
@@ -227,6 +272,8 @@
           createdAt: serverTimestamp()
         });
         document.getElementById("postText").value = "";
+        imageInput.value = "";
+        selectedImageFile = null;
       } catch (e) {
         alert("Failed to post: " + e.message);
       }
@@ -273,10 +320,6 @@
       btn.textContent = `${visible ? 'Show' : 'Hide'} ${repliesDiv.children.length} repl${repliesDiv.children.length === 1 ? 'y' : 'ies'}`;
     };
 
-    window.renderPosts = () => {
-      // no-op, placeholder
-    };
-
     function loadPosts() {
       const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
       onSnapshot(q, snap => {
@@ -288,7 +331,8 @@
           const liked = p.likes.includes(currentUser.uid);
           div.innerHTML = `
             <div class="meta"><strong>@${p.username}</strong></div>
-            <div>${p.content}</div>
+            <div>${p.content || ''}</div>
+            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="Post image">` : ''}
             <div class="timestamp">${formatTimestamp(p.createdAt)}</div>
             <button class="btn-inline" onclick="toggleLike('${id}')">${liked ? "Unlike" : "Like"} (${p.likes.length})</button>
             ${p.userId === currentUser.uid ? `

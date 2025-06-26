@@ -1,1 +1,505 @@
-0
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Ripoff Twitter</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <style>
+    /* === Animated Gradient Background === */
+    @keyframes gradientBG {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    body {
+      margin: 0;
+      padding: 10px;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      color: #eaeaea;
+      background: linear-gradient(-45deg, #1a2a6c, #b21f1f, #fdbb2d, #00d2ff);
+      background-size: 400% 400%;
+      animation: gradientBG 15s ease infinite;
+      display: flex;
+      justify-content: center;
+    }
+    .container {
+      width: 100%;
+      max-width: 600px;
+      padding: 20px;
+    }
+
+    h2 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 20px;
+      color: #fff;
+      text-shadow: 0 2px 4px rgba(0,0,0,0.5);
+    }
+
+    /* === Glassmorphism Cards === */
+    .glass-card {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      border-radius: 16px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.37);
+      padding: 20px;
+      margin-bottom: 20px;
+    }
+
+    input, textarea, button {
+      width: 100%;
+      padding: 12px 14px;
+      margin: 8px 0;
+      box-sizing: border-box;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.4);
+      background: rgba(255, 255, 255, 0.2);
+      color: #fff;
+      backdrop-filter: blur(5px);
+      font-size: 1rem;
+      transition: all 0.3s ease;
+    }
+    input::placeholder,
+    textarea::placeholder {
+      color: rgba(255,255,255,0.7);
+    }
+    input:focus, textarea:focus {
+      outline: none;
+      border-color: #fff;
+      box-shadow: 0 0 8px rgba(255,255,255,0.6);
+    }
+
+    button {
+      background: rgba(255, 255, 255, 0.25);
+      border: 1px solid rgba(255,255,255,0.5);
+      cursor: pointer;
+      font-weight: 600;
+      position: relative;
+      overflow: hidden;
+    }
+    button:hover {
+      background: rgba(255, 255, 255, 0.35);
+      box-shadow: 0 4px 12px rgba(255,255,255,0.4);
+    }
+    /* Neon Glow on Buttons */
+    button:hover::after {
+      content: '';
+      position: absolute;
+      top: -50%;
+      left: -50%;
+      width: 200%;
+      height: 200%;
+      background: radial-gradient(circle at center, rgba(255,255,255,0.6), transparent 70%);
+      opacity: 0.5;
+      animation: glow 1.5s infinite;
+    }
+    @keyframes glow {
+      0%, 100% { transform: scale(1); opacity: 0.4; }
+      50% { transform: scale(1.2); opacity: 0.6; }
+    }
+
+    .btn-inline {
+      width: auto;
+      display: inline-block;
+      margin-right: 8px;
+    }
+
+    /* Posts styling */
+    .post {
+      position: relative;
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255,255,255,0.3);
+      border-radius: 16px;
+      backdrop-filter: blur(8px);
+      padding: 20px;
+      margin: 10px 0;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+      color: #fff;
+    }
+    .post img {
+      max-width: 100%;
+      margin-top: 10px;
+      border-radius: 8px;
+      border: 1px solid rgba(255,255,255,0.4);
+    }
+
+    .meta {
+      font-size: 0.95rem;
+      color: #f0f0f0;
+      margin-bottom: 8px;
+    }
+    .timestamp {
+      font-size: 0.8rem;
+      color: #ddd;
+      margin-top: 10px;
+    }
+    .comment, .reply {
+      font-size: 0.85rem;
+      border-top: 1px dashed rgba(255,255,255,0.3);
+      padding-top: 8px;
+      margin-top: 8px;
+      color: #eee;
+    }
+    .reply {
+      margin-left: 20px;
+      border-left: 2px solid rgba(255,255,255,0.3);
+      padding-left: 12px;
+    }
+
+    .delete-btn {
+      background-color: rgba(224,36,94,0.7);
+      padding: 4px 8px;
+      font-size: 0.75rem;
+      border-radius: 6px;
+      border: none;
+      color: #fff;
+    }
+    .delete-btn:hover {
+      background-color: rgba(183,28,63,0.8);
+    }
+
+    @media (max-width: 600px) {
+      body { padding: 5px; }
+      .container { padding: 10px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>Ripoff Twitter</h2>
+
+    <div id="auth" class="glass-card">
+      <input id="email" type="email" placeholder="Email">
+      <input id="password" type="password" placeholder="Password">
+      <input id="username" type="text" placeholder="Username (for sign up)">
+      <button id="signupBtn">Sign Up</button>
+      <button id="loginBtn">Log In</button>
+      <button id="logoutBtn" style="display:none">Log Out</button>
+    </div>
+    <p id="user-info" style="color: #fff; text-align: center; margin-bottom: 20px;">Not logged in</p>
+
+    <div id="postForm" class="glass-card" style="display:none">
+      <textarea id="postText" placeholder="What's happening?" rows="3"></textarea>
+      <div style="display: flex; align-items: center;">
+        <button id="addImageBtn" class="btn-inline" style="width:auto; padding:8px 12px; margin:0 8px;">＋</button>
+        <input type="file" id="imageInput" accept="image/*" style="display:none">
+        <button id="postBtn" style="flex:1">Post</button>
+      </div>
+    </div>
+
+    <div id="feed"></div>
+  </div>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
+    import { getAnalytics } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-analytics.js";
+    import { getAuth, createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-auth.js";
+    import { getFirestore, doc, collection, addDoc, query, orderBy, onSnapshot, updateDoc, deleteDoc, getDoc, setDoc, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-firestore.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBM0p_RMFnR_scPKrDrKUPOBB0IkQz73ds",
+      authDomain: "ripofftwitter-eb939.firebaseapp.com",
+      projectId: "ripofftwitter-eb939",
+      storageBucket: "ripofftwitter-eb939.appspot.com",
+      messagingSenderId: "1062506746667",
+      appId: "1:1062506746667:web:7d8da60ed0d5678e732b6e",
+      measurementId: "G-YVMHCFYT8H"
+    };
+
+    const IMGUR_CLIENT_ID = "72151c72c01a9d1";
+
+    const app = initializeApp(firebaseConfig);
+    getAnalytics(app);
+    const auth = getAuth();
+    const db = getFirestore(app);
+
+    const emailInput = document.getElementById("email");
+    const passwordInput = document.getElementById("password");
+    const usernameInput = document.getElementById("username");
+    const signupBtn = document.getElementById("signupBtn");
+    const loginBtn = document.getElementById("loginBtn");
+    const logoutBtn = document.getElementById("logoutBtn");
+    const postBtn = document.getElementById("postBtn");
+    const postForm = document.getElementById("postForm");
+    const userInfo = document.getElementById("user-info");
+    const feed = document.getElementById("feed");
+    const addImageBtn = document.getElementById("addImageBtn");
+    const imageInput = document.getElementById("imageInput");
+
+    let currentUser = null;
+    let currentProfile = null;
+    let selectedImageFile = null;
+
+    addImageBtn.onclick = () => imageInput.click();
+    imageInput.onchange = function() {
+      selectedImageFile = this.files[0];
+    };
+
+    onAuthStateChanged(auth, async user => {
+      currentUser = user;
+      if (user) {
+        logoutBtn.style.display = "block";
+        loginBtn.style.display = signupBtn.style.display = "none";
+        postForm.style.display = "block";
+        const profDoc = await getDoc(doc(db, "profiles", user.uid));
+        if (profDoc.exists()) {
+          currentProfile = profDoc.data();
+          userInfo.textContent = `@${currentProfile.username}`;
+        } else {
+          currentProfile = null;
+          userInfo.textContent = `No profile found`;
+        }
+        loadPosts();
+      } else {
+        logoutBtn.style.display = "none";
+        loginBtn.style.display = signupBtn.style.display = "block";
+        postForm.style.display = "none";
+        userInfo.textContent = "Not logged in";
+        feed.innerHTML = "";
+        currentProfile = null;
+      }
+    });
+
+    signupBtn.onclick = async () => {
+      const email = emailInput.value;
+      const password = passwordInput.value;
+      const username = usernameInput.value.trim();
+      if (!username) return alert("Username required");
+      try {
+        const cred = await createUserWithEmailAndPassword(auth, email, password);
+        await setDoc(doc(db, "profiles", cred.user.uid), {
+          email,
+          username,
+          createdAt: serverTimestamp()
+        });
+      } catch (e) {
+        alert(e.message);
+      }
+    };
+
+    loginBtn.onclick = async () => {
+      try {
+        await signInWithEmailAndPassword(auth, emailInput.value, passwordInput.value);
+      } catch (e) {
+        alert(e.message);
+      }
+    };
+
+    logoutBtn.onclick = () => signOut(auth);
+
+    postBtn.onclick = async () => {
+      const text = document.getElementById("postText").value.trim();
+      if (!text && !selectedImageFile) return;
+      if (!currentUser || !currentProfile) return alert("Log in first");
+
+      let imageUrl = null;
+      if (selectedImageFile) {
+        const formData = new FormData();
+        formData.append("image", selectedImageFile);
+        try {
+          const res = await fetch("https://api.imgur.com/3/image", {
+            method: "POST",
+            headers: {
+              Authorization: `Client-ID ${IMGUR_CLIENT_ID}`
+            },
+            body: formData
+          });
+          const data = await res.json();
+          if (data.success) {
+            imageUrl = data.data.link;
+          } else {
+            console.error("Imgur upload failed", data);
+          }
+        } catch (e) {
+          console.error("Imgur upload error", e);
+        }
+      }
+
+      try {
+        await addDoc(collection(db, "posts"), {
+          content: text,
+          imageUrl: imageUrl,
+          userId: currentUser.uid,
+          username: currentProfile.username,
+          likes: [],
+          comments: [],
+          createdAt: serverTimestamp()
+        });
+        document.getElementById("postText").value = "";
+        imageInput.value = "";
+        selectedImageFile = null;
+      } catch (e) {
+        alert("Failed to post: " + e.message);
+      }
+    };
+
+    function formatTimestamp(ts) {
+      if (!ts) return "";
+      const date = ts.toDate();
+      return date.toLocaleString();
+    }
+
+    function renderComments(comments, postId) {
+      return comments.map((c, i) => {
+        const replies = c.replies || [];
+        return `
+        <div class="comment">
+          <strong>@${c.by}:</strong> ${c.text}
+          ${currentProfile && c.by === currentProfile.username ? `<button class="btn-inline delete-btn" onclick="deleteComment('${postId}', ${i})">Delete</button>` : ''}
+          <div class="reply">
+            <button id="toggle-replies-${postId}-${i}" class="btn-inline" onclick="toggleReplies('${postId}', ${i})">
+              Show ${replies.length} repl${replies.length === 1 ? 'y' : 'ies'}
+            </button>
+            <div id="replies-${postId}-${i}" style="display:none; margin-top:5px;">
+              ${replies.map((r, ri) => `
+                <div>
+                  <strong>@${r.by}:</strong> ${r.text}
+                  ${currentProfile && r.by === currentProfile.username ? `<button class="btn-inline delete-btn" onclick="deleteReply('${postId}', ${i}, ${ri})">Delete</button>` : ''}
+                </div>
+              `).join("")}
+            </div>
+            <input type="text" id="reply-${postId}-${i}" placeholder="Reply to @${c.by}">
+            <button class="btn-inline" onclick="replyToComment('${postId}', ${i})">Reply</button>
+          </div>
+        </div>
+      `;
+      }).join("");
+    }
+
+    window.toggleReplies = (postId, commentIndex) => {
+      const repliesDiv = document.getElementById(`replies-${postId}-${commentIndex}`);
+      const btn = document.getElementById(`toggle-replies-${postId}-${commentIndex}`);
+      const visible = repliesDiv.style.display === 'block';
+      repliesDiv.style.display = visible ? 'none' : 'block';
+      btn.textContent = `${visible ? 'Show' : 'Hide'} ${repliesDiv.children.length} repl${repliesDiv.children.length === 1 ? 'y' : 'ies'}`;
+    };
+
+    function loadPosts() {
+      const q = query(collection(db, "posts"), orderBy("createdAt", "desc"));
+      onSnapshot(q, snap => {
+        feed.innerHTML = "";
+        snap.forEach(docSnap => {
+          const p = docSnap.data(), id = docSnap.id;
+          const div = document.createElement("div");
+          div.className = "post";
+          const liked = p.likes.includes(currentUser.uid);
+          div.innerHTML = `
+            <div class="meta"><strong>@${p.username}</strong></div>
+            <div>${p.content || ''}</div>
+            ${p.imageUrl ? `<img src="${p.imageUrl}" alt="Post image">` : ''}
+            <div class="timestamp">${formatTimestamp(p.createdAt)}</div>
+            <button class="btn-inline" onclick="toggleLike('${id}')">${liked ? "Unlike" : "Like"} (${p.likes.length})</button>
+            ${p.userId === currentUser.uid ? `
+              <button class="btn-inline" onclick="editPost('${id}', \`${p.content}\`)">Edit</button>
+              <button class="btn-inline" onclick="deletePost('${id}')">Delete</button>` : ''}
+            <div class="comment-box">
+              <button id="toggle-comments-${id}" class="btn-inline" onclick="toggleComments('${id}')">
+                Show ${ (p.comments || []).length } comment${ (p.comments || []).length === 1 ? '' : 's' }
+              </button>
+              <div id="comments-${id}" style="display:none; margin-top:5px;">
+                <input type="text" id="comment-${id}" placeholder="Reply...">
+                <button class="btn-inline" onclick="addComment('${id}')">Reply</button>
+                ${renderComments(p.comments || [], id)}
+              </div>
+            </div>`;
+          feed.appendChild(div);
+        });
+      });
+    }
+
+    window.toggleComments = (postId) => {
+      const commentsDiv = document.getElementById(`comments-${postId}`);
+      const btn = document.getElementById(`toggle-comments-${postId}`);
+      const visible = commentsDiv.style.display === 'block';
+      commentsDiv.style.display = visible ? 'none' : 'block';
+      const count = commentsDiv.querySelectorAll('.comment').length;
+      btn.textContent = `${visible ? 'Show' : 'Hide'} ${count} comment${count === 1 ? '' : 's'}`;
+    };
+
+    window.toggleLike = async (postId) => {
+      if (!currentUser) return alert("Log in first");
+      const postRef = doc(db, "posts", postId);
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) return;
+      const data = postSnap.data();
+      const likes = data.likes || [];
+      const idx = likes.indexOf(currentUser.uid);
+      if (idx >= 0) likes.splice(idx, 1);
+      else likes.push(currentUser.uid);
+      await updateDoc(postRef, { likes });
+    };
+
+    window.addComment = async (postId) => {
+      if (!currentUser || !currentProfile) return alert("Log in first");
+      const input = document.getElementById(`comment-${postId}`);
+      const text = input.value.trim();
+      if (!text) return;
+      const postRef = doc(db, "posts", postId);
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) return alert("Post missing");
+      const comments = postSnap.data().comments || [];
+      comments.push({ by: currentProfile.username, text, replies: [] });
+      await updateDoc(postRef, { comments });
+      input.value = "";
+    };
+
+    window.replyToComment = async (postId, commentIndex) => {
+      if (!currentUser || !currentProfile) return alert("Log in first");
+      const input = document.getElementById(`reply-${postId}-${commentIndex}`);
+      const text = input.value.trim();
+      if (!text) return;
+      const postRef = doc(db, "posts", postId);
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) return alert("Post missing");
+      const comments = postSnap.data().comments || [];
+      if (!comments[commentIndex]) return alert("Comment missing");
+      comments[commentIndex].replies = comments[commentIndex].replies || [];
+      comments[commentIndex].replies.push({ by: currentProfile.username, text });
+      await updateDoc(postRef, { comments });
+      input.value = "";
+    };
+
+    window.deleteComment = async (postId, commentIndex) => {
+      if (!currentUser || !currentProfile) return alert("Log in first");
+      const postRef = doc(db, "posts", postId);
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) return alert("Post missing");
+      const comments = postSnap.data().comments || [];
+      if (!comments[commentIndex]) return alert("Comment missing");
+      if (comments[commentIndex].by !== currentProfile.username) return alert("Not your comment");
+      if (!confirm("Delete this comment?")) return;
+      comments.splice(commentIndex, 1);
+      await updateDoc(postRef, { comments });
+    };
+
+    window.deleteReply = async (postId, commentIndex, replyIndex) => {
+      if (!currentUser || !currentProfile) return alert("Log in first");
+      const postRef = doc(db, "posts", postId);
+      const postSnap = await getDoc(postRef);
+      if (!postSnap.exists()) return alert("Post missing");
+      const comments = postSnap.data().comments || [];
+      if (!comments[commentIndex] || !comments[commentIndex].replies || !comments[commentIndex].replies[replyIndex]) return alert("Reply missing");
+      if (comments[commentIndex].replies[replyIndex].by !== currentProfile.username) return alert("Not your reply");
+      if (!confirm("Delete this reply?")) return;
+      comments[commentIndex].replies.splice(replyIndex, 1);
+      await updateDoc(postRef, { comments });
+    };
+
+    window.editPost = async (postId, oldContent) => {
+      const newText = prompt("Edit your post:", oldContent);
+      if (newText === null) return;
+      const trimmed = newText.trim();
+      if (!trimmed) return alert("Cannot be empty");
+      const postRef = doc(db, "posts", postId);
+      await updateDoc(postRef, { content: trimmed });
+    };
+
+    window.deletePost = async (postId) => {
+      if (!confirm("Delete this post?")) return;
+      await deleteDoc(doc(db, "posts", postId));
+    };
+  </script>
+</body>
+</html>
